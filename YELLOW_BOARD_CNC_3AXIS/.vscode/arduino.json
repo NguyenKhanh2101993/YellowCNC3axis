@@ -1,0 +1,6 @@
+{
+    "board": "arduino:avr:mega",
+    "configuration": "cpu=atmega2560",
+    "port": "COM4",
+    "sketch": "YELLOW_BOARD_CNC_3AXIS.ino"
+}
