@@ -453,8 +453,8 @@ void loop() {
   }
   //if (mycomflag == 1) {bool result = run_motor_timer1(12800, 50000); mycomflag = 0;}
   //if (mycomflag == 2) {bool result = run_motor_timer1(-12800, 50000); mycomflag = 0;}
-  if (mycomflag == 1) {Execute_YaxisStep(25600, 20000); mycomflag = 0;}
-  if (mycomflag == 2) {Execute_YaxisStep(-25600, 20000); mycomflag = 0;}
+  if (mycomflag == 1) {Execute_YaxisStep(25600, 30000); mycomflag = 0;}
+  if (mycomflag == 2) {Execute_YaxisStep(-25600, 30000); mycomflag = 0;}
   userInput = "";
   while (Serial.available()>0){
     userInput += char(Serial.read()); 
