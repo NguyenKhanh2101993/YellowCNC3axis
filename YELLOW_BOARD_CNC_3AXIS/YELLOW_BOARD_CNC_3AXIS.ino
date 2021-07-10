@@ -78,10 +78,11 @@ ISR (TIMER1_CAPT_vect) // Ngat tran ICR1, ICF1 = 1
 ISR (TIMER3_CAPT_vect) // Ngat tran ICR3, ICF3 = 1
 {
   pulse_count_motor_Y ++;
+  pulse_cnt_Y = (state_dir_motor_Y == CCW)? pre_pulse_cnt_Y - pulse_count_motor_Y : pre_pulse_cnt_Y + pulse_count_motor_Y;
   if (pulse_count_motor_Y < acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(1); // tăng tốc
   if (pulse_count_motor_Y > pulse_set_Y - acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(-1); // giảm tốc
-  pulse_cnt_Y = (state_dir_motor_Y == CCW)? pre_pulse_cnt_Y - pulse_count_motor_Y : pre_pulse_cnt_Y + pulse_count_motor_Y;
-  if (pulse_count_motor_Y == pulse_set_Y) {stop_motor_Y();}
+  if (pulse_count_motor_Y == pulse_set_Y) stop_motor_Y();
+
 }
 ISR (TIMER4_CAPT_vect) // Ngat tran ICR4, ICF4 = 1
 {
