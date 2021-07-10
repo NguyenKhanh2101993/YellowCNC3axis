@@ -80,10 +80,7 @@ ISR (TIMER3_CAPT_vect) // Ngat tran ICR3, ICF3 = 1
   pulse_count_motor_Y ++;
   if (pulse_count_motor_Y < acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(1); // tăng tốc
   if (pulse_count_motor_Y > pulse_set_Y - acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(-1); // giảm tốc
-  if (state_dir_motor_Y == CCW) {pulse_cnt_Y =  pre_pulse_cnt_Y - pulse_count_motor_Y;}
-  if (state_dir_motor_Y == CW)  {pulse_cnt_Y =  pre_pulse_cnt_Y + pulse_count_motor_Y;}
-  //pulse_cnt_Y = (state_dir_motor_Y == CCW)? pre_pulse_cnt_Y - pulse_count_motor_Y : pre_pulse_cnt_Y + pulse_count_motor_Y;
-
+  pulse_cnt_Y = (state_dir_motor_Y == CCW)? pre_pulse_cnt_Y - pulse_count_motor_Y : pre_pulse_cnt_Y + pulse_count_motor_Y;
   if (pulse_count_motor_Y == pulse_set_Y) {stop_motor_Y();}
 }
 ISR (TIMER4_CAPT_vect) // Ngat tran ICR4, ICF4 = 1
@@ -158,9 +155,7 @@ void Execute_YaxisStep(int32_t Yaxis_value, uint32_t freq){
   else {
     pulse_done_Y = false;
     pulse_set_Y = abs(Yaxis_value);
-    if (Yaxis_value > 0) state_dir_motor_Y = CW;
-    if (Yaxis_value < 0) state_dir_motor_Y = CCW;
-
+    state_dir_motor_Y = (Yaxis_value > 0)? CW:CCW;
     if (pulse_set_Y < 2*acc_dec_pulse + acc_offset ) { 
       acc_dec_pulse_Y = (pulse_set_Y - acc_offset)/2;
       if (acc_dec_pulse_Y <= 0) acc_dec_pulse_Y = 0;
@@ -451,7 +446,7 @@ void loop() {
   //node_slave.poll();
   //Serial.println(pulsecounter);
   //Serial.println(counter_timer1);
-  
+  //Serial.println(pulse_cnt_Y);
   if (rotary_encoder_active == 1){
       bool state_encoder_channel_A = PIND&B00000100;
       bitWrite(PORTB, PB5, state_encoder_channel_A);
