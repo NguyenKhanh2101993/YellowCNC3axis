@@ -49,9 +49,7 @@ uint8_t pwm,dir;
 uint8_t rotary_encoder_active;
 uint8_t state_pwm = 0;
 uint32_t _pulse_run;
-uint16_t acceleration_pulse;
-#define acc_offset 10
-#define acc_dec_pulse 600
+uint16_t acc_dec_pulse_Y;
 #define run_motor_X() bitToggle(PORTB, PB5)
 #define set_dir_motor_X(_dir) bitWrite(PORTB, PB6, _dir)
 //===============================================================================================================
@@ -80,11 +78,11 @@ ISR (TIMER1_CAPT_vect) // Ngat tran ICR1, ICF1 = 1
 ISR (TIMER3_CAPT_vect) // Ngat tran ICR3, ICF3 = 1
 {
   pulse_count_motor_Y ++;
-  if (pulse_count_motor_Y < acceleration_pulse) Motor_Y_ID3.execute_acc_dec(1); // tăng tốc
-  if (pulse_count_motor_Y > pulse_set_Y - acceleration_pulse) Motor_Y_ID3.execute_acc_dec(-1); // giảm tốc
-
+  if (pulse_count_motor_Y < acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(1); // tăng tốc
+  if (pulse_count_motor_Y > pulse_set_Y - acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(-1); // giảm tốc
   if (state_dir_motor_Y == CCW) {pulse_cnt_Y =  pre_pulse_cnt_Y - pulse_count_motor_Y;}
   if (state_dir_motor_Y == CW)  {pulse_cnt_Y =  pre_pulse_cnt_Y + pulse_count_motor_Y;}
+  //pulse_cnt_Y = (state_dir_motor_Y == CCW)? pre_pulse_cnt_Y - pulse_count_motor_Y : pre_pulse_cnt_Y + pulse_count_motor_Y;
 
   if (pulse_count_motor_Y == pulse_set_Y) {stop_motor_Y();}
 }
@@ -164,11 +162,11 @@ void Execute_YaxisStep(int32_t Yaxis_value, uint32_t freq){
     if (Yaxis_value < 0) state_dir_motor_Y = CCW;
 
     if (pulse_set_Y < 2*acc_dec_pulse + acc_offset ) { 
-      acceleration_pulse = (pulse_set_Y - acc_offset)/2;
-      if (acceleration_pulse <= 0) acceleration_pulse = 0;
+      acc_dec_pulse_Y = (pulse_set_Y - acc_offset)/2;
+      if (acc_dec_pulse_Y <= 0) acc_dec_pulse_Y = 0;
     } 
-    else acceleration_pulse = acc_dec_pulse;
-    Motor_Y_ID3.generate_pwm(Yaxis_value, freq, acceleration_pulse);
+    else acc_dec_pulse_Y = acc_dec_pulse;
+    Motor_Y_ID3.generate_pwm(Yaxis_value, freq, acc_dec_pulse_Y);
   }
 }
 //================================================================
@@ -284,7 +282,7 @@ void attach_timer_counter_01(uint16_t init_value){
   TIFR1  |= (0 << TOV1);   // TOV1 = 1 sẽ chạy hàm ngắt
   TCCR1B |=   (1 << CS11);  // prescaler = 8, P_clock=16mhz/8 = 2mhz, 1 xung = 0.5 us
   TCNT1 = init_value; //init_value; 
-  begin_timer1 = init_value - acceleration_pulse;
+  begin_timer1 = init_value - acc_dec_pulse_Y;
   if (begin_timer1 < 0) begin_timer1 = 0;
   interrupts();
 }
@@ -299,8 +297,8 @@ ISR(TIMER1_OVF_vect)
   run_motor_X();
   state_pwm = !state_pwm;
   counter_timer1 += state_pwm;
-  if (counter_timer1 < acceleration_pulse) begin_timer1 += state_pwm;
-  if (counter_timer1 > _pulse_run - acceleration_pulse) begin_timer1 -= state_pwm;
+  if (counter_timer1 < acc_dec_pulse_Y) begin_timer1 += state_pwm;
+  if (counter_timer1 > _pulse_run - acc_dec_pulse_Y) begin_timer1 -= state_pwm;
   TCNT1 = begin_timer1; 
   if (counter_timer1 == _pulse_run) {counter_timer1 = 0; detach_timer_counter_01();}
 }
@@ -327,10 +325,10 @@ boolean run_motor_timer1(int32_t pulse, uint32_t freq, uint16_t acc = 500){
     if (init_timer1 < 0) {init_timer1 = 0;}
     _pulse_run = abs(pulse);
     if (_pulse_run < 2*acc + acc_offset ) { 
-      acceleration_pulse = (_pulse_run - acc_offset)/2;
-      if (acceleration_pulse <= 0) acceleration_pulse = 0;
+      acc_dec_pulse_Y = (_pulse_run - acc_offset)/2;
+      if (acc_dec_pulse_Y <= 0) acc_dec_pulse_Y = 0;
     } 
-    else acceleration_pulse = acc;
+    else acc_dec_pulse_Y = acc;
     attach_timer_counter_01(init_timer1); // bắt đầu đếm thời gian dùng timer 1
   }
   Serial.println("pulse_done_PB5");
