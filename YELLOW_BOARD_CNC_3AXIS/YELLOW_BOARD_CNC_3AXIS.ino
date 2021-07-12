@@ -2,13 +2,12 @@
 #include "StepperMotor.h"
 #include "TAYMAY.h"
 #include "Config_slaves.h"
-#include <AccelStepper.h>
 //================================================================
 //================================================================
 #define ARDUINO_ADDRESS             3    // Dia chi board arduino slaver can dieu khien
 
 Modbus                  node_slave(MODBUS_SERIAL, ARDUINO_ADDRESS, MODBUS_CONTROL_PIN);       
-StepperMotor            Motor_X_ID3, Motor_Y_ID3, Motor_Z_ID3, Motor_A_ID3;
+StepperMotor            Motor_X, Motor_Y, Motor_Z, Motor_A;
 
 bool coil[32]; uint8_t coil_size = sizeof(coil) / sizeof(coil[0]); // Khai bao số lượng coil dùng cho write single coil
 uint16_t state_coil;   // Gia tri tuong ung voi coil[i]
@@ -49,7 +48,7 @@ uint8_t pwm,dir;
 uint8_t rotary_encoder_active;
 uint8_t state_pwm = 0;
 uint32_t _pulse_run;
-uint16_t acc_dec_pulse_Y;
+uint16_t acc_dec_pulse_X, acc_dec_pulse_Y, acc_dec_pulse_Z, acc_dec_pulse_A;
 #define run_motor_X() bitToggle(PORTB, PB5)
 #define set_dir_motor_X(_dir) bitWrite(PORTB, PB6, _dir)
 //===============================================================================================================
@@ -70,62 +69,51 @@ bool pulse_done_motor[4];
 ISR (TIMER1_CAPT_vect) // Ngat tran ICR1, ICF1 = 1
 {
   pulse_count_motor_X ++;
-  if (state_dir_motor_X == CCW) {pulse_cnt_X =  pre_pulse_cnt_X - pulse_count_motor_X;}
-  if (state_dir_motor_X == CW)  {pulse_cnt_X =  pre_pulse_cnt_X + pulse_count_motor_X;}
-
-  if (pulse_count_motor_X == pulse_set_X) {stop_motor_X(); }
+  pulse_cnt_X = (state_dir_motor_X == CCW)? pre_pulse_cnt_X - pulse_count_motor_X : pre_pulse_cnt_X + pulse_count_motor_X;
+  if (pulse_count_motor_X < acc_dec_pulse_X) Motor_X.execute_acc_dec(1); // tăng tốc
+  if (pulse_count_motor_X > pulse_set_X - acc_dec_pulse_X) Motor_X.execute_acc_dec(-1); // giảm tốc
+  if (pulse_count_motor_X == pulse_set_X) stop_motor_X();
 }
 ISR (TIMER3_CAPT_vect) // Ngat tran ICR3, ICF3 = 1
 {
   pulse_count_motor_Y ++;
   pulse_cnt_Y = (state_dir_motor_Y == CCW)? pre_pulse_cnt_Y - pulse_count_motor_Y : pre_pulse_cnt_Y + pulse_count_motor_Y;
-  if (pulse_count_motor_Y < acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(1); // tăng tốc
-  if (pulse_count_motor_Y > pulse_set_Y - acc_dec_pulse_Y) Motor_Y_ID3.execute_acc_dec(-1); // giảm tốc
+  if (pulse_count_motor_Y < acc_dec_pulse_Y) Motor_Y.execute_acc_dec(1); // tăng tốc
+  if (pulse_count_motor_Y > pulse_set_Y - acc_dec_pulse_Y) Motor_Y.execute_acc_dec(-1); // giảm tốc
   if (pulse_count_motor_Y == pulse_set_Y) stop_motor_Y();
 
 }
 ISR (TIMER4_CAPT_vect) // Ngat tran ICR4, ICF4 = 1
 {
   pulse_count_motor_Z ++;
-  if (state_dir_motor_Z == CCW) {pulse_cnt_Z =  pre_pulse_cnt_Z - pulse_count_motor_Z;}
-  if (state_dir_motor_Z == CW)  {pulse_cnt_Z =  pre_pulse_cnt_Z + pulse_count_motor_Z;}
-  if (pulse_count_motor_Z == pulse_set_Z) {stop_motor_Z(); }
+  pulse_cnt_Z = (state_dir_motor_Z == CCW)? pre_pulse_cnt_Z - pulse_count_motor_Z : pre_pulse_cnt_Z + pulse_count_motor_Z;
+  if (pulse_count_motor_Z < acc_dec_pulse_Z) Motor_Z.execute_acc_dec(1); // tăng tốc
+  if (pulse_count_motor_Z > pulse_set_Z - acc_dec_pulse_Z) Motor_Z.execute_acc_dec(-1); // giảm tốc
+  if (pulse_count_motor_Z == pulse_set_Z) stop_motor_Z();
 }
 ISR (TIMER5_CAPT_vect) // Ngat tran ICR5, ICF5 = 1
 {
   pulse_count_motor_A ++;
-  if (state_dir_motor_A == CCW) {pulse_cnt_A =  pre_pulse_cnt_A - pulse_count_motor_A;}
-  if (state_dir_motor_A == CW)  {pulse_cnt_A =  pre_pulse_cnt_A + pulse_count_motor_A;}
-
-  if (pulse_count_motor_A == pulse_set_A) {stop_motor_A(); }
+  pulse_cnt_A = (state_dir_motor_A == CCW)? pre_pulse_cnt_A - pulse_count_motor_A : pre_pulse_cnt_A + pulse_count_motor_A;
+  if (pulse_count_motor_A < acc_dec_pulse_A) Motor_A.execute_acc_dec(1); // tăng tốc
+  if (pulse_count_motor_A > pulse_set_A - acc_dec_pulse_A) Motor_A.execute_acc_dec(-1); // giảm tốc
+  if (pulse_count_motor_A == pulse_set_A) stop_motor_A();
 }
 //================================================================
 void stop_motor_X(void){
-  Motor_X_ID3.detach();
-  pre_pulse_cnt_X = pulse_cnt_X;
-  pulse_count_motor_X = 0;
-  pulse_done_X = true;
+  Motor_X.detach();pre_pulse_cnt_X = pulse_cnt_X;pulse_count_motor_X = 0;pulse_done_X = true;
   if (go_home_X == true) {pulse_cnt_X = 0; pre_pulse_cnt_X = 0; go_home_X = false;}
 }
 void stop_motor_Y(void){
-  Motor_Y_ID3.detach();
-  pre_pulse_cnt_Y = pulse_cnt_Y;
-  pulse_count_motor_Y = 0;
-  pulse_done_Y = true;
+  Motor_Y.detach();pre_pulse_cnt_Y = pulse_cnt_Y;pulse_count_motor_Y = 0;pulse_done_Y = true;
   if (go_home_Y == true) {pulse_cnt_Y = 0; pre_pulse_cnt_Y = 0; go_home_Y = false;}
 }
 void stop_motor_Z(void){
-  Motor_Z_ID3.detach();
-  pre_pulse_cnt_Z = pulse_cnt_Z;
-  pulse_count_motor_Z = 0;
-  pulse_done_Z = true;
+  Motor_Z.detach();pre_pulse_cnt_Z = pulse_cnt_Z;pulse_count_motor_Z = 0;pulse_done_Z = true;
   if (go_home_Z == true) {pulse_cnt_Z = 0; pre_pulse_cnt_Z = 0; go_home_Z = false;}
 }
 void stop_motor_A(void){
-  Motor_A_ID3.detach();
-  pre_pulse_cnt_A = pulse_cnt_A;
-  pulse_count_motor_A = 0;
-  pulse_done_A = true;
+  Motor_A.detach();pre_pulse_cnt_A = pulse_cnt_A;pulse_count_motor_A = 0;pulse_done_A = true;
   if (go_home_A == true) {pulse_cnt_A = 0; pre_pulse_cnt_A = 0; go_home_A = false;}
 }
 //================================================================
@@ -137,15 +125,15 @@ void Execute_DelayStep(uint16_t delay_value){
 //================================================================
 // Thực hiện lệnh phát xung chạy trục X_AXIS (timer1)
 void Execute_XaxisStep(int32_t Xaxis_value, uint32_t freq){
-  gain_accel_freq_X = (freq - start_end_freq)/acceleration_time;  // tính hệ số tăng tốc
-  gain_decel_freq_X = (start_end_freq - freq)/deceleration_time;  // tính hệ số giảm tốc
   if (Xaxis_value == 0) {pulse_done_X = true;}
   else {
-    pulse_done_X = false;
-    pulse_set_X = abs(Xaxis_value);
-    if (Xaxis_value > 0) {state_dir_motor_X = CW;}
-    if (Xaxis_value < 0) {state_dir_motor_X = CCW;}
-    Motor_X_ID3.generate_pwm(Xaxis_value, freq);
+    pulse_done_X = false;pulse_set_X = abs(Xaxis_value);state_dir_motor_X = (Xaxis_value > 0)? CW:CCW;
+    if (pulse_set_X < 2*acc_dec_pulse + acc_offset ) { 
+      acc_dec_pulse_X = (pulse_set_X - acc_offset)/2;
+      if (acc_dec_pulse_X <= 0) acc_dec_pulse_X = 0;
+    } 
+    else acc_dec_pulse_X = acc_dec_pulse;
+    Motor_X.generate_pwm(Xaxis_value, freq, acc_dec_pulse_X);
   }
 }
 //================================================================
@@ -154,43 +142,41 @@ void Execute_YaxisStep(int32_t Yaxis_value, uint32_t freq){
   
   if (Yaxis_value == 0) {pulse_done_Y = true;}
   else {
-    pulse_done_Y = false;
-    pulse_set_Y = abs(Yaxis_value);
-    state_dir_motor_Y = (Yaxis_value > 0)? CW:CCW;
+    pulse_done_Y = false;pulse_set_Y = abs(Yaxis_value);state_dir_motor_Y = (Yaxis_value > 0)? CW:CCW;
     if (pulse_set_Y < 2*acc_dec_pulse + acc_offset ) { 
       acc_dec_pulse_Y = (pulse_set_Y - acc_offset)/2;
       if (acc_dec_pulse_Y <= 0) acc_dec_pulse_Y = 0;
     } 
     else acc_dec_pulse_Y = acc_dec_pulse;
-    Motor_Y_ID3.generate_pwm(Yaxis_value, freq, acc_dec_pulse_Y);
+    Motor_Y.generate_pwm(Yaxis_value, freq, acc_dec_pulse_Y);
   }
 }
 //================================================================
 // Thực hiện lệnh phát xung chạy trục Z_AXIS
 void Execute_ZaxisStep(int32_t Zaxis_value, uint32_t freq){
-  gain_accel_freq_Z = (freq - start_end_freq)/acceleration_time;  // tính hệ số tăng tốc
-  gain_decel_freq_Z = (start_end_freq - freq)/deceleration_time;  // tính hệ số giảm tốc
   if (Zaxis_value == 0) {pulse_done_Z = true;}
   else {
-    pulse_done_Z = false;
-    pulse_set_Z = abs(Zaxis_value);
-    if (Zaxis_value > 0) {state_dir_motor_Z = CW;}
-    if (Zaxis_value < 0) {state_dir_motor_Z = CCW;}
-    Motor_Z_ID3.generate_pwm(Zaxis_value, freq);
+    pulse_done_Z = false;pulse_set_Z = abs(Zaxis_value);state_dir_motor_Z = (Zaxis_value > 0)? CW:CCW;
+    if (pulse_set_Z < 2*acc_dec_pulse + acc_offset ) { 
+      acc_dec_pulse_Z = (pulse_set_Z - acc_offset)/2;
+      if (acc_dec_pulse_Z <= 0) acc_dec_pulse_Z = 0;
+    } 
+    else acc_dec_pulse_Z = acc_dec_pulse;
+    Motor_Z.generate_pwm(Zaxis_value, freq, acc_dec_pulse_Z);
   }
 }
 //================================================================
 // Thực hiện lệnh phát xung chạy trục A_AXIS
 void Execute_AaxisStep(int32_t Aaxis_value, uint32_t freq) { 
-  gain_accel_freq_A = (freq - start_end_freq)/acceleration_time;  // tính hệ số tăng tốc
-  gain_decel_freq_A = (start_end_freq - freq)/deceleration_time;  // tính hệ số giảm tốc
   if (Aaxis_value == 0) {pulse_done_A = true;}
   else {
-    pulse_done_A = false;
-    pulse_set_A = abs(Aaxis_value);
-    if (Aaxis_value > 0) {state_dir_motor_A = CW;}
-    if (Aaxis_value < 0) {state_dir_motor_A = CCW;}
-    Motor_A_ID3.generate_pwm(Aaxis_value, freq);
+    pulse_done_A = false;pulse_set_A = abs(Aaxis_value);state_dir_motor_A = (Aaxis_value > 0)? CW:CCW;
+    if (pulse_set_A < 2*acc_dec_pulse + acc_offset ) { 
+      acc_dec_pulse_A = (pulse_set_A - acc_offset)/2;
+      if (acc_dec_pulse_A <= 0) acc_dec_pulse_A = 0;
+    } 
+    else acc_dec_pulse_A = acc_dec_pulse;
+    Motor_A.generate_pwm(Aaxis_value, freq, acc_dec_pulse_A);
   }
 }
 //================================================================
@@ -221,24 +207,16 @@ void execute_point_to_point(int32_t *pulse, uint32_t *speed) {
   Execute_AaxisStep(pulse[3],speed[3]);
 }
 //================================================================
-// Dừng động cơ ở vị trí bất kỳ
+// Dừng chương trình
 void stop_motor(void) {
   stop_motor_X(); stop_motor_Y(); stop_motor_Z(); stop_motor_A();
 }
+// Dừng động cơ ở vị trí bất kỳ
 void pause_motor(void){
-  Motor_X_ID3.detach();
-  Motor_Y_ID3.detach();
-  Motor_Z_ID3.detach();
-  Motor_A_ID3.detach();
-}
-//================================================================
-//================================================================
-// Thực hiện lệnh INPUT_STEP: ứng với giá trị value -> kiểm tra bit cảm biến tương ứng
-// value: giá trị input mong muốn
-// wQty: số lượng byte cần đọc từ ngõ input
-void Execute_InputStep(uint8_t *value, uint8_t wQty){
-    uint8_t *input_data; 
-    bool sensor_match; // Biến so sánh giá trị sensor đọc được và value sensor được tạo ra
+  Motor_X.detach();
+  Motor_Y.detach();
+  Motor_Z.detach();
+  Motor_A.detach();
 }
 //================================================================
 void function_modbus_slave(void){
@@ -263,74 +241,7 @@ TIMSKn: Thanh ghi điều khiển ngắt.
 + bit 1 - OCIEnA: Output Compare Interrupt Enable 1 channel A -  Cho phép ngắt khi dùng Output Compare ở channel A.
 + bit 0 - TOIEn: Overflow Interrupt Enable 1 - Cho phép ngắt khi xảy ra tràn trên T/C.
 */
-void init_timer_counter_01(){ // Normal mode
-// timer 1 tran 65536
-  noInterrupts();
-  TCCR1B = TCCR1A = 0;
-  TIMSK1 = 0;
-  TCCR1B |=   (1 << CS11);  // prescaler = 8, P_clock=16mhz/8 = 2mhz, 1 xung = 0.5 us
-  //------------------------------------------------------------------------------------------------
-  interrupts();  
-}
-void attach_timer_counter_01(uint16_t init_value){
-  noInterrupts();
-  TIMSK1 |=  (1 << TOIE1); // Cho phép ngắt khi xảy ra tràn trên T/C.
-  TIFR1  |= (0 << TOV1);   // TOV1 = 1 sẽ chạy hàm ngắt
-  TCCR1B |=   (1 << CS11);  // prescaler = 8, P_clock=16mhz/8 = 2mhz, 1 xung = 0.5 us
-  TCNT1 = init_value; //init_value; 
-  begin_timer1 = init_value - acc_dec_pulse_Y;
-  if (begin_timer1 < 0) begin_timer1 = 0;
-  interrupts();
-}
-void detach_timer_counter_01(){
-  noInterrupts();
-  TIMSK1 &= ~(1 << TOIE1);
-  interrupts();
-}
-//================================================================
-ISR(TIMER1_OVF_vect) 
-{ 
-  run_motor_X();
-  state_pwm = !state_pwm;
-  counter_timer1 += state_pwm;
-  if (counter_timer1 < acc_dec_pulse_Y) begin_timer1 += state_pwm;
-  if (counter_timer1 > _pulse_run - acc_dec_pulse_Y) begin_timer1 -= state_pwm;
-  TCNT1 = begin_timer1; 
-  if (counter_timer1 == _pulse_run) {counter_timer1 = 0; detach_timer_counter_01();}
-}
 //===============================================================================================================
-// Ham phat xung: số xung: pulse, tần số: freq, tăng tốc/giảm tốc: acc (theo đơn vị xung)
-boolean run_motor_timer1(int32_t pulse, uint32_t freq, uint16_t acc = 500){
-  bool pulse_done_PB5 = false; bool dir_motor[4]; 
-  uint16_t counter_timer1_motor[4];
-/*
-  for (int i = 0; i < pack_size, i++){
-    if (pulse[i] == 0 || freq[i] == 0){ pulse_done_motor[i] = true;}
-    else {
-      pulse_done_motor[i] = false;
-      dir_motor[i] = (pulse[i] > 0 ? true : false);
-      counter_timer1_motor[i] = 1000000/freq[i]; // timer1 đếm 
-    }
-  }
-  */
-  if (pulse == 0 || freq == 0) pulse_done_PB5 = true;
-  else {
-    bool dir_PB6 = (pulse > 0) ? true : false; 
-    set_dir_motor_X(dir_PB6);
-    uint16_t init_timer1 = 65536 - 1000000/freq; 
-    if (init_timer1 < 0) {init_timer1 = 0;}
-    _pulse_run = abs(pulse);
-    if (_pulse_run < 2*acc + acc_offset ) { 
-      acc_dec_pulse_Y = (_pulse_run - acc_offset)/2;
-      if (acc_dec_pulse_Y <= 0) acc_dec_pulse_Y = 0;
-    } 
-    else acc_dec_pulse_Y = acc;
-    attach_timer_counter_01(init_timer1); // bắt đầu đếm thời gian dùng timer 1
-  }
-  Serial.println("pulse_done_PB5");
-  return pulse_done_PB5;
-}
-
 //===============================================================================================================
 // Read the rotary encoder
 void encoder() {
@@ -340,7 +251,6 @@ void encoder() {
     case 1: pulsecounter++; bitSet(PORTB, PB6); break; 
     default: break;       
   }
-  
 }
 // Enable interrupts number 4
 void attach_rotary_encoder(void) {
@@ -360,14 +270,11 @@ void detach_rotary_encoder(void) {
 //============================================================================================
 void init_motor_id3(void){
   noInterrupts();
-  Motor_Z_ID3.begin(PWM_MOTOR_03, DIR_MOTOR_03, ILDE_MOTOR_03);
-  Motor_Y_ID3.begin(PWM_MOTOR_02, DIR_MOTOR_02, ILDE_MOTOR_02);
-  Motor_X_ID3.begin(PWM_MOTOR_01, DIR_MOTOR_01, ILDE_MOTOR_01);
-  Motor_A_ID3.begin(PWM_MOTOR_04, DIR_MOTOR_04, ILDE_MOTOR_04);
+  Motor_Z.begin(PWM_MOTOR_03, DIR_MOTOR_03, ILDE_MOTOR_03);
+  Motor_Y.begin(PWM_MOTOR_02, DIR_MOTOR_02, ILDE_MOTOR_02);
+  Motor_X.begin(PWM_MOTOR_01, DIR_MOTOR_01, ILDE_MOTOR_01);
+  Motor_A.begin(PWM_MOTOR_04, DIR_MOTOR_04, ILDE_MOTOR_04);
   interrupts();
-}
-void reset_slave3(void){
-  asm volatile ( "jmp 0"); 
 }
 //================================================================================================
 void run_array_pulse(void){
@@ -380,82 +287,29 @@ void run_array_pulse(void){
   }
 }
 //================================================================================================
-void go_to_home(void){
-  go_home_X = true;
-  int32_t pulse_home = -1*pulse_cnt_X;
-  Serial.print("gia tri pulse home: "); Serial.println(pulse_home); 
-  Execute_XaxisStep(pulse_home, 100000);
-}
-//================================================================================================
-void init_pin_motor (uint8_t pwm_pin, uint8_t dir_pin){
-    pwm = pwm_pin; dir = dir_pin;
-    pinMode(pwm, OUTPUT); pinMode(dir, OUTPUT);
-    digitalWrite(dir, LOW); digitalWrite(pwm, LOW);
-}
-//================================================================================================
-void Run_motor(int32_t Xaxis_value, uint32_t freq){
-  pulse_cnt_X = 0; 
-  if (Xaxis_value < 0){ digitalWrite(dir, LOW);}
-  if (Xaxis_value > 0){ digitalWrite(dir, HIGH);}
-  while (pulse_cnt_X != abs(Xaxis_value)){
-    digitalWrite(pwm,HIGH); delayMicroseconds(30);
-    digitalWrite(pwm,LOW);  delayMicroseconds(30);
-    pulse_cnt_X ++;
-  }
-}
-//================================================================================================
-/*
-void run_stepper_lib(void){
-  for ( int sr = 0; sr < 2; sr++){
-    delay(100);
-    stepper.move(800);
-    stepper.runToPosition();
-  }  
-    delay(100);
-    stepper.move(3200);
-    stepper.runToPosition();
-    delay(1000);
-}
-*/
-//================================================================================================
-//================================================================================================
-//============================================================================================
 void setup() {   
   Serial.begin(9600);
   MODBUS_SERIAL.begin(MODBUS_BAUDRATE);
   node_slave.begin(MODBUS_BAUDRATE);
   pulse_done_X = pulse_done_Y = pulse_done_Z = pulse_done_A = true;
-  Motor_Y_ID3.begin(PWM_MOTOR_02, DIR_MOTOR_02, ILDE_MOTOR_02);
-  //init_pin_motor(pulse_PWM1A,Dir_PWM1A);
-  //init_motor_id3();
-  //function_modbus_slave();
-  //stepper.setMaxSpeed(_motorMaxSpeed);
-  //stepper.setSpeed(_motorSpeed);
-  //stepper.setAcceleration(_motorAccel);
-  //DDRB |= (1 << PB5); PORTB |=(1<<PB5);
-  //pinMode (11, OUTPUT); digitalWrite(11,LOW);
-  //pinMode (12, OUTPUT); digitalWrite(12,LOW);
+  init_motor_id3();
+  function_modbus_slave();
   pinMode(EncoderA, INPUT_PULLUP);
   pinMode(EncoderB, INPUT_PULLUP);
-  //init_timer_counter_01();
-  Serial.println("Setup OK");
+  Serial.println("Setup CNC 3 axis done");
 }
 //============================================================================================
 //============================================================================================
 void loop() { 
   // nên đưa hàm poll vào vòng loop trong trường hợp monitor data về máy tính. không nên dùng ngắt để chạy poll. 
-  //node_slave.poll();
-  //Serial.println(pulsecounter);
-  //Serial.println(counter_timer1);
-  //Serial.println(pulse_cnt_Y);
+  node_slave.poll();
   if (rotary_encoder_active == 1){
       bool state_encoder_channel_A = PIND&B00000100;
       bitWrite(PORTB, PB5, state_encoder_channel_A);
   }
-  //if (mycomflag == 1) {bool result = run_motor_timer1(12800, 50000); mycomflag = 0;}
-  //if (mycomflag == 2) {bool result = run_motor_timer1(-12800, 50000); mycomflag = 0;}
   if (mycomflag == 1) {Execute_YaxisStep(256000, 30000); mycomflag = 0;}
   if (mycomflag == 2) {Execute_YaxisStep(-256000, 30000); mycomflag = 0;}
+
   userInput = "";
   while (Serial.available()>0){
     userInput += char(Serial.read()); 
@@ -558,7 +412,6 @@ uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length)
         coil[address+i] = node_slave.readCoilFromBuffer(i);
         if (coil[address+i] == 1) {
             switch (address + i) {
-              //case SPRAY_ONOFF_MODBUS_ADDR: test_4a_id3(); break;
               case POINT2POINT_MODBUS_ADDR:   execute_point_to_point(xung_nguyen,pwm_speed); break;
               case PAUSE_MOTOR_MODBUS_ADDR:   pause_motor(); break;
               case ENABLE_HOME_MOBUS_ADDR:    go_to_home_position(); break;  // về vị trí cảm biến gốc máy

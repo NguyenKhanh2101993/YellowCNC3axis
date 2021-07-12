@@ -74,7 +74,7 @@ class Save_file:
     def open_file(self):
         Show_Screen.Show_content.delete('1.0','end')
         Show_Screen.Show_content.config(state = NORMAL)
-        self.file = filedialog.askopenfilename(title = 'Open file .pnt', filetypes =[('file pulse', '*.pnt')],initialdir='/')
+        self.file = filedialog.askopenfilename(title = 'Open file .tap', filetypes =[('tap file', '*.tap')],initialdir='/')
         self.show_initial_directory()
         Show_status.write_status("File: " + str(self.file))
         try:
@@ -83,7 +83,7 @@ class Save_file:
             Show_Screen.Show_content.insert(END,self.show_file) # insert all the characters of file into T
             countVar = IntVar()
             Counter = self.count_line()
-            words = ['X', 'Y', 'Z','A', 'B', 'C', 'S','D']
+            words = ['X', 'Y', 'Z','G', 'M', 'S', 'T','F']
             for i in range(Counter):
                 for j in range(len(words)):
                     searched_position = Show_Screen.Show_content.search(pattern = words[j], index= str(str(i+1) + '.'+'0'), 
@@ -96,7 +96,7 @@ class Save_file:
 
     def save_file(self):
         retrieve_text = Show_Screen.Show_content.get('1.0','end-1c')
-        savefile = filedialog.asksaveasfile(mode='w+', defaultextension='*.pnt', filetypes =[('file pulse', '*.pnt')])
+        savefile = filedialog.asksaveasfile(mode='w+', defaultextension='*.tap', filetypes =[('file pulse', '*.tap')])
         try:
             savefile.write(retrieve_text)  # retrieve_text phải là các ký tự không có dấu.
             savefile.close()
